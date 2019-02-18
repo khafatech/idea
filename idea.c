@@ -407,10 +407,10 @@ int main(int argc, char **argv)
       else if (argv[2][0]=='d') to_or_from=0;
       else
       {
-	 printf("\nUsage: idea filename.ext [e|d[w]] key\n");
-	 printf("		e=encrypt d=decrypt w=overwrite file\n");
-	 printf("       NOTE: Key must be no longer than 8 characters long!!!\n");
-	 exit(-1);
+          printf("\nUsage: idea filename.ext [e|d[w]] key\n");
+          printf("		e=encrypt d=decrypt w=overwrite file\n");
+          printf("       NOTE: Key must be no longer than 8 characters long!!!\n");
+          exit(-1);
       }
       if (argv[2][1]=='w') overwrite=1;
       getuserkeyfromargv(userkey,argv[3]);
@@ -431,12 +431,12 @@ int main(int argc, char **argv)
 
    if (to_or_from==1)
    {
-      printf("\nEncoding file %s   ",filename);
+      printf("\nEncoding file %s   \n",filename);
       cipher_file(fp,temp,userkey);
    }
    else
    {
-      printf("\nDecoding file %s   ",filename);
+      printf("\nDecoding file %s   \n",filename);
       decipher_file(fp,temp,userkey);
    }
 
