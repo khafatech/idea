@@ -10,21 +10,22 @@
 #include <string.h>
 // #include <conio.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 #define IDEAKEYSIZE 16
 #define IDEABLOCKSIZE 8
-#define word16 unsigned int
-#define word32 unsigned long int
+#define word16 uint16_t
+#define word32 uint32_t
 #define ROUNDS	8
 #define KEYLEN	(6*ROUNDS+4)
-#define tempfilename "tempfile.änc"
+#define tempfilename "tempfile.enc"
 
 
 int end_of_file,noisy,overwrite;   /*global vars*/
 
 #define low16(x) ((x) & 0xffff)
 
-typedef unsigned int uint16;
+typedef uint16_t uint16;
 typedef word16 IDEAkey[KEYLEN];
 
 /*IDEA Algorithm functions */
