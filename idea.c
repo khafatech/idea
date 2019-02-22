@@ -40,6 +40,8 @@
 
 #include "idea.h"
 
+void getuserkeyfromargv(word16 *key, char *arg);
+
 uint16 inv(uint16 x)
 {
     uint16 t0,t1;
@@ -235,14 +237,14 @@ void cipher_file(FILE *in,FILE *out,word16 *key)
     IDEAkey Z;
     int x,y;
     int count=0;
-    long length;
+    uint32_t length;
     int temp;
 
     en_key_idea(key,Z);
     end_of_file=0;
 
-    length=filelength(in);
-    fwrite(&length,sizeof(long),1,out);
+    length = (uint32_t) filelength(in);
+    fwrite(&length, sizeof(uint32_t),1,out);
 
     while (!end_of_file)
     {
@@ -278,18 +280,19 @@ void cipher_file(FILE *in,FILE *out,word16 *key)
 void decipher_file(FILE *in,FILE *out,word16 *key)
 {
     word16 input[4],output[4];
-    int x,y;
-    IDEAkey Z,DK;
-    int count=0;
-    long length=0;
+    int x;
+    int y;
+    IDEAkey Z;
+    IDEAkey DK;
+    int count = 0;
+    int32_t length = 0;
 
     en_key_idea(key,Z);
     de_key_idea(Z,DK);
 
     end_of_file=0;
 
-    fread(&length,sizeof(long),1,in);
-
+    fread(&length,sizeof(int32_t),1,in);
 
     while (!end_of_file)
     {
@@ -312,6 +315,97 @@ void decipher_file(FILE *in,FILE *out,word16 *key)
         }
     }
 }
+
+
+#define NUM_WORDLIST_LINES   2000000
+
+int read_file(char *fname, char lines[NUM_WORDLIST_LINES][9]) {
+    char *line = NULL;
+    size_t len = 0;
+    size_t read;
+    FILE * fp;
+    
+    fp = fopen(fname, "r");
+    if (fp == NULL)
+        exit(EXIT_FAILURE);
+    
+    int i=0;
+    while ((read = getline(&line, &len, fp)) != -1) {
+        read--;
+        // printf("Retrieved line of length %zu:\n", read);
+        // printf("%s", line);
+        // don't need null in lines, since it's zero'd
+        strncpy(lines[i], line, read);
+        i++;
+        if (i == NUM_WORDLIST_LINES) {
+            break;
+        }
+    }
+    
+    close(fp);
+    
+    return i;
+}
+
+char words[NUM_WORDLIST_LINES][8+1] = {0};
+
+
+int crack_file(FILE *in, char* wordlist_fname)
+{
+    word16 input[4],output[4];
+    int x;
+    int y;
+    IDEAkey Z;
+    IDEAkey DK;
+    int count = 0;
+    int32_t length = 0;
+
+    word16 key[8];
+
+    end_of_file=0;
+
+    fread(&length,sizeof(int32_t),1,in);
+
+    x=0;
+    while (x<4)
+    {
+        input[x]=read_word16_from_file(in);
+        if (end_of_file)
+            break;
+        x++;
+    }
+
+    // char *words[] = {"apple1", "apple2", "apple", "apple3"}; 
+    
+    printf("reading file\n");
+    int num_words = read_file(wordlist_fname, words);
+    printf("done reading file - read %d words\n", num_words);
+       
+    for (int i=0; i < num_words; i++) {
+        if (i%100000==0) {
+            // printf(".");
+            printf("trying %s\n", words[i]);
+        }
+
+        getuserkeyfromargv(key, words[i]);
+        en_key_idea(key,Z);
+        de_key_idea(Z,DK);
+        cipher_idea(input,output,DK);
+    
+        /* test for zip file in the output */
+        // printf("output[0]: %0x   output[1]: %0x\n", output[0], output[1]);
+        if (output[0] == 0x504b && output[1] == 0x0304) {
+            printf("it's a zip! - found password '%s'\n", words[i]);
+            return 0;
+        } else {
+            // printf("not a zip\n");
+            // return 1;
+        }
+    }
+    return 1;
+}
+
+
 
 void swap_files_and_clean_up(char *file)
 {
@@ -366,7 +460,7 @@ void swap_files_and_clean_up(char *file)
 
 #define KBYTES 1024
 
-void getuserkeyfromargv(word16 *key,char *arg)
+void getuserkeyfromargv(word16 *key, char *arg)
 {
     int x;
 
@@ -376,7 +470,10 @@ void getuserkeyfromargv(word16 *key,char *arg)
         else key[x]=((arg[x]<<8)|(key[x-1]>>8));
     }
 
-    if (strlen(arg)>8) printf ("\nONLY first *8* characters of key used!!!\n");
+    /*
+    if (strlen(arg)>8)
+        printf ("\nONLY first *8* characters of key used!!!\n");
+    */
 
     if (x<8) while (x<8) key[x++]=0;
 }
@@ -387,7 +484,7 @@ int main(int argc, char **argv)
     char filename[100];
     FILE *fp,*temp;
     int to_or_from;
-
+    int crack = 0;
 
     noisy=1;
     overwrite=0;
@@ -396,6 +493,7 @@ int main(int argc, char **argv)
     {
         printf("\nUsage: idea filename.ext [e|d[w]] key\n");
         printf("          e=encode   d=decode   w=overwrite file\n");
+        printf("          c=crack  <wordlist-file>  - test for zip in result.\n");
         printf("       NOTE: Key must be no longer than 8 characters long!!!\n");
         exit(-1);
     }
@@ -405,10 +503,12 @@ int main(int argc, char **argv)
         filename[99]='\0';
         if (argv[2][0]=='e') to_or_from=1;
         else if (argv[2][0]=='d') to_or_from=0;
+        else if (argv[2][0]=='c') crack=1;
         else
         {
             printf("\nUsage: idea filename.ext [e|d[w]] key\n");
             printf("		e=encrypt d=decrypt w=overwrite file\n");
+            printf("		c=crack  <wordlist-file>  - test for zip in result.\n");
             printf("       NOTE: Key must be no longer than 8 characters long!!!\n");
             exit(-1);
         }
@@ -429,7 +529,11 @@ int main(int argc, char **argv)
         exit(-1);
     }
 
-    if (to_or_from==1)
+    if (crack) {
+        printf("cracking\n");
+        exit(crack_file(fp, argv[3]));
+        
+    } else if (to_or_from==1)
     {
         printf("\nEncoding file %s   \n",filename);
         cipher_file(fp,temp,userkey);
